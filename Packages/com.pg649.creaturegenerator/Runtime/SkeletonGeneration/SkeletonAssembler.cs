@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using System;
 using System.Linq;
 using LSystem;
@@ -93,7 +94,9 @@ public class SkeletonAssembler {
 
 
         Rigidbody rb = result.AddComponent<Rigidbody>();
-        rb.useGravity = false;
+        rb.drag = 0.05f;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
 
         Bone bone = result.AddComponent<Bone>();
         bone.category = self.Category;
@@ -135,6 +138,7 @@ public class SkeletonAssembler {
 
             joint.connectedBody = parentGo.GetComponent<Rigidbody>();
             joint.connectedAnchor = parentGo.transform.position;
+            joint.projectionMode = JointProjectionMode.PositionAndRotation;
 
             joint.xMotion = ConfigurableJointMotion.Locked;
             joint.yMotion = ConfigurableJointMotion.Locked;
@@ -172,6 +176,7 @@ public class SkeletonAssembler {
                 meshObject.transform.position = bone.LocalMidpoint();
                 meshObject.transform.rotation = result.transform.rotation; 
 
+                meshObject.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
             }
             SphereCollider collider = result.AddComponent<SphereCollider>();                        
             // NOTE(markus): Needs to be scaled by anther factor of 0.1, not quite sure why
@@ -189,6 +194,7 @@ public class SkeletonAssembler {
                 meshObject.transform.position = bone.LocalMidpoint();
                 meshObject.transform.rotation = result.transform.rotation; 
 
+                meshObject.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
             }
             BoxCollider collider = result.AddComponent<BoxCollider>();
             collider.size = size;
@@ -203,6 +209,7 @@ public class SkeletonAssembler {
                 meshObject.transform.position = bone.LocalMidpoint();
                 meshObject.transform.rotation = result.transform.rotation; 
 
+                meshObject.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
             }
             CapsuleCollider collider = result.AddComponent<CapsuleCollider>();
             collider.height = self.Length;
