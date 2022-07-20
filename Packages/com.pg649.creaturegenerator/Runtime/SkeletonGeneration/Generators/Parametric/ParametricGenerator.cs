@@ -25,6 +25,13 @@ public class ParametricGenerator {
         {(BoneCategory.Arm, BoneCategory.Arm), new JointLimits { XAxisMin = 20, XAxisMax = 160, YAxisSymmetric = 0, ZAxisSymmetric = 0}}
     };
 
+    private static Dictionary<(BoneCategory, BoneCategory), JointLimits> quadrupedJointLimits = new Dictionary<(BoneCategory, BoneCategory), JointLimits>() {
+        {(BoneCategory.Hip, BoneCategory.Leg), new JointLimits { XAxisMin = 50, XAxisMax = 0, YAxisSymmetric = 0, ZAxisSymmetric = 0}},
+        {(BoneCategory.Leg, BoneCategory.LowerLeg1), new JointLimits { XAxisMin = -50, XAxisMax = 0, YAxisSymmetric = 0, ZAxisSymmetric = 0} },
+        {(BoneCategory.LowerLeg1, BoneCategory.LowerLeg2), new JointLimits { XAxisMin = 50, XAxisMax = 0, YAxisSymmetric = 0, ZAxisSymmetric = 0}},
+        {(BoneCategory.LowerLeg2, BoneCategory.Leg), new JointLimits { XAxisMin = -50, XAxisMax = 0, YAxisSymmetric = 0, ZAxisSymmetric = 0}}
+    };
+
 
     public ParametricGenerator(CreatureParameters parameters) {
         this.parameters = parameters;
@@ -53,7 +60,10 @@ public class ParametricGenerator {
         foreach (var arm in arms)
             armAttachmentBone.LinkChild(arm);
 
-        return new SkeletonDefinition(root, new LimitTable(humanoidJointLimits));
+        if (mode == Mode.Biped)
+            return new SkeletonDefinition(root, new LimitTable(humanoidJointLimits));
+        else
+            return new SkeletonDefinition(root, new LimitTable(quadrupedJointLimits));
     }
 
     private List<BoneDefinition> buildArms() {
@@ -68,7 +78,8 @@ public class ParametricGenerator {
             List<float> thicknesses = new();
             thicknesses.Add(Random.Range(parameters.minArmThickness, parameters.maxArmThickness));
             thicknesses.Add(Random.Range(parameters.minArmThickness, parameters.maxArmThickness));
-            thicknesses.Sort();
+            //thicknesses.Sort();
+            //thicknesses.Reverse();
 
             BoneDefinition leftRoot = buildArm(heights, thicknesses);
             BoneDefinition rightRoot = buildArm(heights, thicknesses);
@@ -129,6 +140,7 @@ public class ParametricGenerator {
             thicknesses.Add(Random.Range(parameters.minLegThickness, parameters.maxLegThickness));
             thicknesses.Add(Random.Range(parameters.minLegThickness, parameters.maxLegThickness));
             thicknesses.Sort();
+            thicknesses.Reverse();
 
             BoneDefinition leftLeg = buildLeg(heights, thicknesses);
             BoneDefinition rightLeg = buildLeg(heights, thicknesses);
@@ -149,7 +161,7 @@ public class ParametricGenerator {
                 float height = hindLegHeight;
                 if (i == 1)
                     height = frontLegHeight;
-                float legSplit = Random.Range(0.1f * height, 0.5f * height);
+                float legSplit = Random.Range(0.1f * height, 0.9f * height);
                 float lowerLegSplit = Random.Range(legSplit + 0.25f * (height - legSplit), legSplit + 0.75f * (height - legSplit));
                 float upperLegSplit = Random.Range(0.25f * legSplit, 0.75f * legSplit);
 
@@ -162,6 +174,7 @@ public class ParametricGenerator {
                 thicknesses.Add(Random.Range(parameters.minLegThickness, parameters.maxLegThickness));
                 thicknesses.Add(Random.Range(parameters.minLegThickness, parameters.maxLegThickness));
                 thicknesses.Sort();
+                thicknesses.Reverse();
 
                 for (int j = -1; j < 2; j+=2)
                 {
@@ -179,16 +192,25 @@ public class ParametricGenerator {
 
         BoneDefinition root = buildLegPart(lengths[0], thicknesses[0]);
         BoneDefinition prev = root;
+        JointLimits jointLimits = quadrupedJointLimits[(BoneCategory.Hip, root.Category)];
+        //if(mode == Mode.Quadruped)
+            //root.AttachmentHint.Rotation = Quaternion.Euler(Random.Range(jointLimits.XAxisMin, jointLimits.XAxisMax), 0f, 0f);
 
-        foreach (var (length, thickness) in lengths.Zip(thicknesses, (a, b) => (a, b)).Skip(1)) {
-            BoneDefinition part = buildLegPart(length, thickness);
+        for (int i = 1; i < lengths.Count; i++)
+        {
+            BoneDefinition part = buildLegPart(lengths[i], thicknesses[i], i);
             prev.LinkChild(part);
+            /*if (mode == Mode.Quadruped && quadrupedJointLimits.ContainsKey((prev.Category, part.Category)))
+            {
+                jointLimits = quadrupedJointLimits[(prev.Category, part.Category)];
+                part.AttachmentHint.Rotation = Quaternion.Euler(Random.Range(jointLimits.XAxisMin, jointLimits.XAxisMax), 0f, 0f);
+            }*/
             prev = part;
         }
         return root;
     }
 
-    private BoneDefinition buildLegPart(float length, float thickness) {
+    private BoneDefinition buildLegPart(float length, float thickness, int index=0) {
         BoneDefinition part = new();
 
         part.Length = length;
@@ -196,7 +218,12 @@ public class ParametricGenerator {
         part.ProximalAxis = Vector3.up;
         part.VentralAxis = Vector3.forward;
         part.Category = BoneCategory.Leg;
-        part.AttachmentHint = new();
+        if (index == 1)
+            part.Category = BoneCategory.LowerLeg1;
+        else if (index == 2)
+            part.Category = BoneCategory.LowerLeg2;
+        /*else if (index == 3)
+            part.Category = BoneCategory.Foot;*/
         part.Thickness = thickness;
 
         return part;
@@ -246,6 +273,7 @@ public class ParametricGenerator {
             part.ProximalAxis = Vector3.down;
             part.VentralAxis = Vector3.forward;
         }
+        // Construct Torso pointing forward, with front side facing down.
         else if (mode == Mode.Quadruped)
         {
             part.ProximalAxis = Vector3.back;
@@ -264,12 +292,18 @@ public class ParametricGenerator {
         float segmentLength = neckSize / neckSegments;
         float neckThickness = 0.2f;
 
-        //Vector3 fwd = 0.5f * ((torso[2].endPoint - torso[2].startPoint).normalized + Vector3.up);
+        //tilt neck at random angle between being aligned with torso and 90 degrees upwards (quadruped)
+        float angle = Random.Range(0f, 90f);
 
         BoneDefinition prev = attachTo;
         for (int i=0; i<neckSegments; i++)
         {
             BoneDefinition neckPart = buildNeckPart(segmentLength, neckThickness);
+            if (mode == Mode.Quadruped)
+            {
+                neckPart.AttachmentHint.Rotation = Quaternion.Euler(angle, 0f, 0f);
+                angle = Random.Range(-30f, 30f);
+            }
             prev.LinkChild(neckPart);
             prev = neckPart;
         }
@@ -308,25 +342,50 @@ public class ParametricGenerator {
 
     private void attachLegs(List<BoneDefinition> legs, BoneDefinition torso)
     {
-        buildHip(torso, legs[0], Vector3.left);
-        buildHip(torso, legs[1], Vector3.right);
+        float upDownAngle = 0f;
+        float lrAngle = 0f;
+        //set random hip rotation within limits
+        if (mode == Mode.Biped)
+        {
+            upDownAngle = Random.Range(-40f, 40f);
+        }
+        else if (mode == Mode.Quadruped)
+        {
+            upDownAngle = Random.Range(-40f, 40f);
+            lrAngle = Random.Range(-30, 30);
+        }
+        //build one hip segment for each leg with mirrored rotation
+        buildHip(torso, legs[0], Vector3.left, rotation: Quaternion.Euler(upDownAngle, lrAngle, 0f));
+        buildHip(torso, legs[1], Vector3.right, rotation: Quaternion.Euler(upDownAngle, -lrAngle, 0f));
 
         if (mode == Mode.Quadruped)
         {
-            buildHip(neckAttachmentBone, legs[2], Vector3.left, AttachmentPoints.DistalPoint);
-            buildHip(neckAttachmentBone, legs[3], Vector3.right, AttachmentPoints.DistalPoint);
+            //make separate hip rotation for front legs
+            upDownAngle = Random.Range(-40f, 40f);
+            lrAngle = Random.Range(-30, 30);
+            buildHip(neckAttachmentBone, legs[2], Vector3.left, AttachmentPoints.DistalPoint, Quaternion.Euler(lrAngle, upDownAngle, 0f));
+            buildHip(neckAttachmentBone, legs[3], Vector3.right, AttachmentPoints.DistalPoint, Quaternion.Euler(lrAngle, -upDownAngle, 0f));
         }
     }
     
-    private BoneDefinition buildHip(BoneDefinition attachTo, BoneDefinition leg, Vector3 proximalAxis, float attachmentPoint = AttachmentPoints.ProximalPoint)
+    private BoneDefinition buildHip(BoneDefinition attachTo, BoneDefinition leg, Vector3 proximalAxis, float attachmentPoint = AttachmentPoints.ProximalPoint, Quaternion? rotation = null)
     {
         BoneDefinition hip = new();
         hip.Length = attachTo.Thickness;
         hip.ProximalAxis = proximalAxis;
-        hip.VentralAxis = Vector3.forward;
+        hip.VentralAxis = Vector3.down;
         hip.Category = BoneCategory.Hip;
         hip.Thickness = 0f; // For now to avoid metaball generation around hip
         hip.AttachmentHint.AttachmentPoint = attachmentPoint;
+
+        //make legs counter hip rotation so that they still go straight down
+        hip.AttachmentHint.Rotation = rotation;
+        float flipRotation = Vector3.Dot(proximalAxis, Vector3.left) > 0 ? 1f : -1f;
+        if (leg.AttachmentHint.Rotation.HasValue)
+            leg.AttachmentHint.Rotation *= Quaternion.Euler(0f, flipRotation * rotation.Value.eulerAngles.x, rotation.Value.eulerAngles.y);
+        else
+            leg.AttachmentHint.Rotation = Quaternion.Euler(0f, flipRotation * rotation.Value.eulerAngles.x, rotation.Value.eulerAngles.y);
+        
         attachTo.LinkChild(hip);
         hip.LinkChild(leg);
         return hip;

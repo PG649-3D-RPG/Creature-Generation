@@ -32,6 +32,12 @@ public class Ball
             case MetaballFunction.Exponential:
                 v = Exponential(x, y, z);
                 break;
+            case MetaballFunction.ExponentialThin:
+                v = Exponential(x, y, z, 1.2f);
+                break;
+            case MetaballFunction.Boolean:
+                v = Boolean(x, y, z);
+                break;
             default:
                 throw new Exception("Unrecognized metaball function!");
         }
@@ -46,8 +52,14 @@ public class Ball
         return Mathf.Pow(R, p)/Mathf.Pow(r, p);
     }
     
-    internal float Exponential(float x, float y, float z) {
-        return Mathf.Exp(0.5f - (0.5f * (Mathf.Pow(x - position.x, 2) + Mathf.Pow(y - position.y, 2) + Mathf.Pow(z - position.z, 2))) / (R*R));
+    internal float Exponential(float x, float y, float z, float b = 0.5f) {
+        return Mathf.Exp(b - (b * (Mathf.Pow(x - position.x, 2) + Mathf.Pow(y - position.y, 2) + Mathf.Pow(z - position.z, 2))) / (R*R));
+    }
+
+    internal float Boolean(float x, float y, float z)
+    {
+        float r = Mathf.Sqrt(Mathf.Pow(x - position.x, 2) + Mathf.Pow(y - position.y, 2) + Mathf.Pow(z - position.z, 2));
+        return r <= R ? 2f: 0f;
     }
 
     public static int GetMinimumNumBalls(MetaballFunction function, float segmentLength, float segmentThickness) {

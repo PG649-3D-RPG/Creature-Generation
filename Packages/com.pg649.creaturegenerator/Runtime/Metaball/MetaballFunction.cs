@@ -5,5 +5,7 @@ using UnityEngine;
 public enum MetaballFunction {
     Polynomial2, 
     Polynomial3, 
-    Exponential
+    Exponential,
+    ExponentialThin,
+    Boolean
 }
